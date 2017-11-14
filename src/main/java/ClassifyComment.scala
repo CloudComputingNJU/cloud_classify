@@ -1,11 +1,18 @@
 import com.mongodb.spark.MongoSpark
 import com.mongodb.spark.config.ReadConfig
+import org.apache.spark.ml.classification.NaiveBayes
+import org.apache.spark.ml.feature.{HashingTF, IDF, Tokenizer}
+import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{StructType,StructField,StringType};
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.mllib.linalg.Vector
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.rdd.RDD
 
-case class rawComment(category:Int, comment:String)
+import scala.collection.JavaConversions._
+
+case class rawComment(category:String, comment:String)
 
 object ClassifyComment extends App {
   val sparkConf = new SparkConf()
@@ -13,31 +20,60 @@ object ClassifyComment extends App {
     .setMaster("local[2]")
     .set("spark.driver.host", "localhost")
     .set("spark.mongodb.input.uri", "mongodb://zc-slave/jd.comment_word")
+  val sc = new SparkContext(sparkConf);
+  def getCommentVector(readConfig: ReadConfig) = {
 
-  def getCommentVector(){
-    val sc = new SparkContext(sparkConf);
-    val readConfig = ReadConfig(
-    Map(
+    val commentRDD = MongoSpark.load(sc, readConfig)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    import sqlContext.implicits._
+
+    val sourceDF = commentRDD.map { comment =>
+      val words = comment.get("words").asInstanceOf[java.util.ArrayList[String]]
+      val wordStr = words.mkString(" ")
+      rawComment(comment.get("classify").asInstanceOf[Int].toString(), wordStr)
+    }.toDF()
+    val tokenizer = new Tokenizer().setInputCol("comment").setOutputCol("words")
+    val wordsData = tokenizer.transform(sourceDF)
+
+    val hashingTF = new HashingTF().setInputCol("words").setOutputCol("rawFeatures")
+                    .setNumFeatures(10000000)
+    val featurizedData = hashingTF.transform(wordsData)
+
+    val idf = new IDF().setInputCol("rawFeatures").setOutputCol("features")
+    val idfModel = idf.fit(featurizedData)
+
+    val rescaledData = idfModel.transform(featurizedData)
+    rescaledData.select("category", "features").show()
+    //转换成Bayes的输入格式
+
+    var trainDataRdd = rescaledData.select("category","features").map {
+      case Row(label: String, features: Vector) =>
+        (label.toDouble, Vectors.dense(features.toArray))
+    }
+//    return trainDataRdd
+
+  }
+
+  def naiveBayes(): Unit ={
+    val readTrainData = ReadConfig(
+      Map(
+        "uri" -> "mongodb://zc-slave:27017",
+        "database" -> "jd",
+        "collection" -> "word_test"), Some(ReadConfig(sc)))
+    val readTestData = ReadConfig(Map(
       "uri" -> "mongodb://zc-slave:27017",
       "database" -> "jd",
-      "collection" -> "comment_word"), Some(ReadConfig(sc)))
-    val commentRDD = MongoSpark.load(sc, readConfig)
-    import sqlContext.implicits._
-    val schemaString = "classify words"
-    val schema = StructType(schemaString.split(" ").map(fieldName=>StructField(fieldName,StringType,true)))
-    val sourceDF = commentRDD.map (comment =>
-      rawComment(comment.get("classify").asInstanceOf[Int], comment.get("words").asInstanceOf[String])
-    )
-    sourceDF.count()
-    SparkSession.
-    val peopleRDD = SparkSession.sparkContext
-      .textFile("file:/E:/scala_workspace/z_spark_study/people.txt",2)
-      .map( x => x.split(",")).map( x => Person(x(0),x(1).trim().toInt)).toDF()
-    peopleRDD
+      "collection" -> "test_word"), Some(ReadConfig(sc)))
+    getCommentVector(readTrainData)
+//    val trainData = getCommentVector(readTrainData)
+//    trainData.show()
+//    val testData = getCommentVector(readTestData)
+//    testData.show()
+//    val model = new NaiveBayes()
 
   }
-  }
 
 
-  getCommentVector()
+  naiveBayes()
+
 }

@@ -21,7 +21,7 @@
             <version>2.2.0</version>
 
             <!--如果出现spark-sql的错误就把下面一行注释打开-->
-            <scope>compile</scope>
+            <!--<scope>compile</scope>-->
         </dependency>
 
         <dependency>
