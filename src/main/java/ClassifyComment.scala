@@ -3,6 +3,7 @@ import com.mongodb.spark.config.ReadConfig
 import org.apache.spark.ml.feature._
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.{SparkConf, SparkContext}
+
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.linalg.Vectors
@@ -10,6 +11,7 @@ import org.apache.spark.ml.classification.{NaiveBayes, NaiveBayesModel}
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.rdd.RDD
 import org.bson.Document
+
 
 import scala.collection.JavaConversions._
 
@@ -56,16 +58,20 @@ object ClassifyComment extends App {
       case Row(label: String, features: Vector) =>
         LabeledPoint(label.toDouble, Vectors.dense(features.toArray))
     }
+
 //    val df = spark.createDataset(data).toDF("id", "features", "clicked")
-
-    val selector = new ChiSqSelector()
-      .setNumTopFeatures(50)
-      .setFeaturesCol("features")
-      .setLabelCol("category")
-      .setOutputCol("selectedFeatures")
-
-    val result = selector.fit(trainDataRdd).transform(trainDataRdd)
-    return result
+//
+//    val selector = new ChiSqSelector()
+//      .setNumTopFeatures(50)
+//      .setFeaturesCol("features")
+//      .setLabelCol("category")
+//      .setOutputCol("selectedFeatures")
+//
+//    val result = selector.fit(trainDataRdd).transform(trainDataRdd)
+//    return result
+//=======
+//    trainDataRdd.take(1).foreach(println)
+    return trainDataRdd
 
   }
 
@@ -101,7 +107,7 @@ object ClassifyComment extends App {
 
     val readConfig = ReadConfig(
       Map(
-        "uri" -> "mongodb://zc-slave:27017",
+        "uri" -> "mongodb://127.0.0.1:27017",
         "database" -> "jd",
         "collection" -> "word_for_bayes"), Some(ReadConfig(sc)))
     val commentRDD = MongoSpark.load(sc, readConfig)
@@ -124,12 +130,13 @@ object ClassifyComment extends App {
       .setPredictionCol("prediction")
       .setMetricName("accuracy")
     val accuracy = evaluator.evaluate(predictions)
-    println("准确率:"+accuracy)
+    println("准确率:"+accuracy.toString)
 
 //    保存模型
     model.write.overwrite().save("model_naiveBayes10")
 
     getCommentWithoutClassVector(split(2))
+
 
   }
 
