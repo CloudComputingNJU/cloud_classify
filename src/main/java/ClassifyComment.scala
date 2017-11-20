@@ -23,7 +23,11 @@ object ClassifyComment extends App {
       .setMaster("local[3]")
 //    .setMaster("spark://pyq-master:7077")
     .set("spark.driver.host", "localhost")
+<<<<<<< HEAD
     .set("spark.mongodb.input.uri", "mongodb://127.0.0.1/jd.all_words")
+=======
+    .set("spark.mongodb.input.uri", "mongodb://172.19.165.137/jd.test_data")
+>>>>>>> 903de5b0e748ee202f0dee7799f113ea8292f180
     .set("spark.executor.memory","2g")
     .set("spark.executor.heartbeatInterval","20000")
 
@@ -35,22 +39,26 @@ object ClassifyComment extends App {
     val trainDF=data.map { comment =>
       val words = comment.get("words").asInstanceOf[java.util.ArrayList[String]]
       val wordStr = words.mkString(" ")
+<<<<<<< HEAD
       var classify = comment.get("classify").asInstanceOf[Int];
       rawComment(classify.toString(), wordStr)
+=======
+      rawComment(comment.get("classify").asInstanceOf[Int].toString, wordStr)
+>>>>>>> 903de5b0e748ee202f0dee7799f113ea8292f180
     }.toDF()
-
+//trainDF.show(1)
     val tokenizer = new Tokenizer().setInputCol("comment").setOutputCol("words")
     val wordsData = tokenizer.transform(trainDF)
-
+//wordsData.show(1)
     val hashingTF = new HashingTF().setInputCol("words").setOutputCol("rawFeatures")
                     .setNumFeatures(10000)
     val featurizedData = hashingTF.transform(wordsData)
-
+//featurizedData.show(1)
     val idf = new IDF().setInputCol("rawFeatures").setOutputCol("features")
     val idfModel = idf.fit(featurizedData)
 
     val rescaledData = idfModel.transform(featurizedData)
-
+//rescaledData.show(1)
     //转换成Bayes的输入格式
 
     var trainDataRdd = rescaledData.select($"category",$"features").map {
@@ -58,6 +66,25 @@ object ClassifyComment extends App {
         LabeledPoint(label.toDouble, Vectors.dense(features.toArray))
     }
 
+<<<<<<< HEAD
+=======
+//
+//    val selector = new ChiSqSelector()
+//      .setNumTopFeatures(2)
+//      .setFeaturesCol("features")
+//      .setLabelCol("category")
+//      .setOutputCol("selectedFeatures")
+////
+//    val result = selector.fit(rescaledData).transform(rescaledData)
+//    var trainDataRdd=result.select($"category",$"selectedFeatures").map{
+//      case Row(label: Double, selectedFeatures: Vector) =>
+//        LabeledPoint(label, Vectors.dense(selectedFeatures.toArray))
+//
+//    }
+//    rescaledData.show(1)
+//    print(result.col("selectedFeatures")(1))
+//    trainDataRdd.show(1)
+>>>>>>> 903de5b0e748ee202f0dee7799f113ea8292f180
     return trainDataRdd
 
   }
@@ -87,12 +114,13 @@ object ClassifyComment extends App {
 //    val testData = getCommentVector(dccRDD)
 
 //trainData.show(1)
-    //建立模型
-    val model =new NaiveBayes().fit(trainData)
+//    建立模型
+    val model =new NaiveBayes().setModelType("multinomial").setSmoothing(1.0).fit(trainData)
     val predictions = model.transform(testData)
     predictions.show(100)
 
 //    评估模型
+<<<<<<< HEAD
 //    val evaluator = new MulticlassClassificationEvaluator()
 //      .setLabelCol("label")
 //      .setPredictionCol("prediction")
@@ -105,10 +133,28 @@ object ClassifyComment extends App {
     model.write.overwrite().save("model_naiveBayes")
 
 //    getCommentWithoutClassVector(split(2))
+=======
+    val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+//      .setMetricName("accuracy")
+//    val accuracy = evaluator.evaluate(predictions)
+    val weightedPrecision=evaluator.setMetricName("weightedPrecision").evaluate(predictions);
+
+    println("精度:"+weightedPrecision.toString)
+
+//    println("准确率:"+accuracy.toString)
+
+//    保存模型
+//    model.write.overwrite().save("model_naiveBayes1BalanceData")
+
+//
+>>>>>>> 903de5b0e748ee202f0dee7799f113ea8292f180
 
 
   }
 
+<<<<<<< HEAD
   def validateModel():  Unit = {
     val readConfig2 = ReadConfig(
       Map(
@@ -121,7 +167,12 @@ object ClassifyComment extends App {
     model.transform(testData).show(3)
   }
 //  naiveBayes()
-  validateModel()
+//  validateModel()
+
+
+  naiveBayes()
+//  getCommentWithoutClassVector(split(2))
+
 
 
 

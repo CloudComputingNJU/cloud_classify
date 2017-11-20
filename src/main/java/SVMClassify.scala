@@ -15,6 +15,7 @@ import org.bson.Document
 
 import scala.collection.JavaConversions._
 
+case class rawComment2(category:String, comment:String)
 
 object SVMClassify extends App {
   val sparkConf = new SparkConf()
@@ -22,7 +23,7 @@ object SVMClassify extends App {
     .setMaster("local[3]")
     //    .setMaster("spark://pyq-master:7077")
     .set("spark.driver.host", "localhost")
-    .set("spark.mongodb.input.uri", "mongodb://127.0.0.1/jd.validate_data")
+    .set("spark.mongodb.input.uri", "mongodb://172.19.165.137/jd.all_words_data")
     .set("spark.executor.memory","2g")
     .set("spark.executor.heartbeatInterval","20000")
 
@@ -58,6 +59,7 @@ object SVMClassify extends App {
       val wordStr = words.mkString(" ")
       var classify = comment.get("classify").asInstanceOf[Int];
       rawComment(classify.toString(), wordStr)
+
     }.toDF()
 
     val tokenizer = new Tokenizer().setInputCol("comment").setOutputCol("words")
@@ -97,7 +99,7 @@ object SVMClassify extends App {
 
     val readConfig = ReadConfig(
       Map(
-        "uri" -> "mongodb://127.0.0.1:27017",
+        "uri" -> "mongodb://172.19.165.137:27017",
         "database" -> "jd",
         "collection" -> "all_words_data"), Some(ReadConfig(sc)))
     val commentRDD = MongoSpark.load(sc, readConfig)
@@ -111,12 +113,13 @@ object SVMClassify extends App {
 //    predictModel(trainData,testData,10,0.1)
 //    println("------numIterations:10,stepSize:0.01")
 //    predictModel(trainData,testData,10,0.01)
+
   }
 
   def predictModel(trainData:Dataset[LabeledPoint],testData:Dataset[LabeledPoint],numIterations:Int,stepSize: Double):Unit={
     val lsvc = new LinearSVC().setMaxIter(numIterations).setRegParam(stepSize)
     val lsvcModel = lsvc.fit(trainData)
-    lsvcModel.write.overwrite().save("model_svm")
+    lsvcModel.write.overwrite().save("model_svm2")
 
     val predictions = lsvcModel.transform(testData)
     predictions.show()
