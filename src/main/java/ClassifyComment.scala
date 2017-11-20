@@ -3,20 +3,18 @@ import com.mongodb.spark.config.ReadConfig
 import org.apache.spark.ml.feature._
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.{SparkConf, SparkContext}
-
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.classification.{NaiveBayes, NaiveBayesModel}
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
 import org.apache.spark.rdd.RDD
 import org.bson.Document
-
 
 import scala.collection.JavaConversions._
 
 
-case class rawComment(category:Int, comment:String)
+case class rawComment(category:String, comment:String)
 case class Comment(comment:String)
 
 object ClassifyComment extends App {
@@ -25,7 +23,7 @@ object ClassifyComment extends App {
       .setMaster("local[3]")
 //    .setMaster("spark://pyq-master:7077")
     .set("spark.driver.host", "localhost")
-    .set("spark.mongodb.input.uri", "mongodb://zc-slave/jd.comment_word")
+    .set("spark.mongodb.input.uri", "mongodb://172.19.165.137/jd.test_data")
     .set("spark.executor.memory","2g")
       .set("spark.executor.heartbeatInterval","20000")
 
@@ -37,7 +35,7 @@ object ClassifyComment extends App {
     val trainDF=data.map { comment =>
       val words = comment.get("words").asInstanceOf[java.util.ArrayList[String]]
       val wordStr = words.mkString(" ")
-      rawComment(comment.get("classify").asInstanceOf[Int], wordStr)
+      rawComment(comment.get("classify").asInstanceOf[Int].toString, wordStr)
     }.toDF()
 //trainDF.show(1)
     val tokenizer = new Tokenizer().setInputCol("comment").setOutputCol("words")
@@ -54,24 +52,24 @@ object ClassifyComment extends App {
 //rescaledData.show(1)
     //转换成Bayes的输入格式
 
-//    var trainDataRaw = rescaledData.select($"category",$"features").map {
-//      case Row(label: String, features: Vector) =>
-//        LabeledPoint(label.toDouble, Vectors.dense(features.toArray))
-//    }
-
-//
-    val selector = new ChiSqSelector()
-      .setNumTopFeatures(2)
-      .setFeaturesCol("features")
-      .setLabelCol("category")
-      .setOutputCol("selectedFeatures")
-//
-    val result = selector.fit(rescaledData).transform(rescaledData)
-    var trainDataRdd=result.select($"category",$"selectedFeatures").map{
-      case Row(label: Int, selectedFeatures: Vector) =>
-        LabeledPoint(label.toDouble, Vectors.dense(selectedFeatures.toArray))
-
+    var trainDataRdd = rescaledData.select($"category",$"features").map {
+      case Row(label: String, features: Vector) =>
+        LabeledPoint(label.toDouble, Vectors.dense(features.toArray))
     }
+
+//
+//    val selector = new ChiSqSelector()
+//      .setNumTopFeatures(2)
+//      .setFeaturesCol("features")
+//      .setLabelCol("category")
+//      .setOutputCol("selectedFeatures")
+////
+//    val result = selector.fit(rescaledData).transform(rescaledData)
+//    var trainDataRdd=result.select($"category",$"selectedFeatures").map{
+//      case Row(label: Double, selectedFeatures: Vector) =>
+//        LabeledPoint(label, Vectors.dense(selectedFeatures.toArray))
+//
+//    }
 //    rescaledData.show(1)
 //    print(result.col("selectedFeatures")(1))
 //    trainDataRdd.show(1)
@@ -124,7 +122,7 @@ object ClassifyComment extends App {
 
 //trainData.show(1)
 //    建立模型
-    val model =new NaiveBayes().fit(trainData)
+    val model =new NaiveBayes().setModelType("multinomial").setSmoothing(1.0).fit(trainData)
     val predictions = model.transform(testData)
     predictions.show(1)
 
@@ -132,12 +130,16 @@ object ClassifyComment extends App {
     val evaluator = new MulticlassClassificationEvaluator()
       .setLabelCol("label")
       .setPredictionCol("prediction")
-      .setMetricName("accuracy")
-    val accuracy = evaluator.evaluate(predictions)
-    println("准确率:"+accuracy.toString)
+//      .setMetricName("accuracy")
+//    val accuracy = evaluator.evaluate(predictions)
+    val weightedPrecision=evaluator.setMetricName("weightedPrecision").evaluate(predictions);
+
+    println("精度:"+weightedPrecision.toString)
+
+//    println("准确率:"+accuracy.toString)
 
 //    保存模型
-    model.write.overwrite().save("model_naiveBayes1withSelector1")
+//    model.write.overwrite().save("model_naiveBayes1BalanceData")
 
 //
 

@@ -22,7 +22,7 @@ object TestNaiveBayes extends App{
     .setMaster("local[3]")
     //    .setMaster("spark://pyq-master:7077")
     .set("spark.driver.host", "localhost")
-    .set("spark.mongodb.input.uri", "mongodb://zc-slave/jd.word_for_prediction")
+    .set("spark.mongodb.input.uri", "mongodb://zc-slave/jd.words_Prediction")
     .set("spark.executor.memory","2g")
     .set("spark.executor.heartbeatInterval","20000")
 
@@ -35,7 +35,7 @@ object TestNaiveBayes extends App{
     val trainDF=data.map { comment =>
       val words = comment.get("words").asInstanceOf[java.util.ArrayList[String]]
       val wordStr = words.mkString(" ")
-      rawComment(comment.get("classify").asInstanceOf[Int], wordStr)
+      rawComment(comment.get("classify").asInstanceOf[Int].toString, wordStr)
 
     }.toDF()
 
@@ -51,20 +51,24 @@ object TestNaiveBayes extends App{
 
     val rescaledData = idfModel.transform(featurizedData)
 
-    val selector = new ChiSqSelector()
-      .setNumTopFeatures(2)
-      .setFeaturesCol("features")
-      .setLabelCol("category")
-      .setOutputCol("selectedFeatures")
-    //
-    val result = selector.fit(rescaledData).transform(rescaledData)
-    var predictDataRdd=result.select($"category",$"selectedFeatures").map{
-      case Row(label: Int, selectedFeatures: Vector) =>
-        LabeledPoint(label.toDouble, Vectors.dense(selectedFeatures.toArray))
-
-    }
-    val model =NaiveBayesModel.load("model_naiveBayes10")
-    model.transform(predictDataRdd).select($"label",$"prediction").show(10)
+//    var predicDataRdd = rescaledData.select($"comment",$"category",$"features").map {
+//      case Row(comment:String,label: Double, features: Vector) =>
+//        LabeledPoint(label.toDouble, Vectors.dense(features.toArray))
+//    }
+//    val selector = new ChiSqSelector()
+//      .setNumTopFeatures(2)
+//      .setFeaturesCol("features")
+//      .setLabelCol("category")
+//      .setOutputCol("selectedFeatures")
+//    //
+//    val result = selector.fit(rescaledData).transform(rescaledData)
+//    var predictDataRdd=result.select($"words",$"category",$"selectedFeatures").map{
+//      case Row(words:String,label: Double, selectedFeatures: Vector) =>
+//        LabeledPoint(label, Vectors.dense(selectedFeatures.toArray))
+//
+//    }
+    val model =NaiveBayesModel.load("model_naiveBayes1BalanceData")
+    model.transform(rescaledData).select($"words",$"prediction").show(10)
 
 
 
@@ -76,7 +80,7 @@ object TestNaiveBayes extends App{
     val readTestData = ReadConfig(Map(
       "uri" -> "mongodb://zc-slave:27017",
       "database" -> "jd",
-      "collection" -> "word_for_prediction"), Some(ReadConfig(sc)))
+      "collection" -> "words_Prediction"), Some(ReadConfig(sc)))
 
 
     val commentRDD = MongoSpark.load(sc, readTestData)

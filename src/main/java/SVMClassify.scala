@@ -14,6 +14,7 @@ import org.bson.Document
 
 import scala.collection.JavaConversions._
 
+case class rawComment2(category:String, comment:String)
 
 object SVMClassify extends App {
   val sparkConf = new SparkConf()
@@ -21,7 +22,7 @@ object SVMClassify extends App {
     .setMaster("local[3]")
     //    .setMaster("spark://pyq-master:7077")
     .set("spark.driver.host", "localhost")
-    .set("spark.mongodb.input.uri", "mongodb://127.0.0.1/jd.validate_data")
+    .set("spark.mongodb.input.uri", "mongodb://172.19.165.137/jd.all_words_data")
     .set("spark.executor.memory","2g")
     .set("spark.executor.heartbeatInterval","20000")
 
@@ -33,20 +34,16 @@ object SVMClassify extends App {
     val trainDF=data.map { comment =>
       val words = comment.get("words").asInstanceOf[java.util.ArrayList[String]]
       val wordStr = words.mkString(" ")
-      var classify = comment.get("classify").asInstanceOf[Double];
-      if(classify >= 3){
-          classify = 1;
-      }else{
-          classify = 0;
-      }
-      rawComment(classify.toString(), wordStr)
+      var classify = comment.get("classify");
+
+      rawComment2(classify.toString(), wordStr)
     }.toDF()
 
     val tokenizer = new Tokenizer().setInputCol("comment").setOutputCol("words")
     val wordsData = tokenizer.transform(trainDF)
 
     val hashingTF = new HashingTF().setInputCol("words").setOutputCol("rawFeatures")
-      .setNumFeatures(100000)
+      .setNumFeatures(10000)
     val featurizedData = hashingTF.transform(wordsData)
 
     val idf = new IDF().setInputCol("rawFeatures").setOutputCol("features")
@@ -68,18 +65,18 @@ object SVMClassify extends App {
 
     val readConfig = ReadConfig(
       Map(
-        "uri" -> "mongodb://127.0.0.1:27017",
+        "uri" -> "mongodb://172.19.165.137:27017",
         "database" -> "jd",
-        "collection" -> "validate_data"), Some(ReadConfig(sc)))
+        "collection" -> "all_words_data"), Some(ReadConfig(sc)))
     val commentRDD = MongoSpark.load(sc, readConfig)
     val split = commentRDD.randomSplit(Array(0.8,0.2))
 
     val trainData = getCommentVector(split(0))
     val testData = getCommentVector(split(1))
-    println("------numIterations:5,stepSize:0.1")
-    predictModel(trainData,testData,5,0.1)
-    println("------numIterations:10,stepSize:0.1")
-    predictModel(trainData,testData,10,0.1)
+//    println("------numIterations:5,stepSize:0.1")
+//    predictModel(trainData,testData,5,0.1)
+//    println("------numIterations:10,stepSize:0.1")
+//    predictModel(trainData,testData,10,0.1)
     println("------numIterations:10,stepSize:0.01")
     predictModel(trainData,testData,10,0.01)
   }
@@ -87,7 +84,7 @@ object SVMClassify extends App {
   def predictModel(trainData:Dataset[LabeledPoint],testData:Dataset[LabeledPoint],numIterations:Int,stepSize: Double):Unit={
     val lsvc = new LinearSVC().setMaxIter(numIterations).setRegParam(stepSize)
     val lsvcModel = lsvc.fit(trainData)
-    lsvcModel.write.overwrite().save("model_svm")
+    lsvcModel.write.overwrite().save("model_svm2")
 
     val predictions = lsvcModel.transform(testData)
 
